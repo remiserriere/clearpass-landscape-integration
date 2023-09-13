@@ -86,7 +86,7 @@ CREATE FOREIGN TABLE distribution (
 CREATE EXTENSION IF NOT EXISTS tablefunc;
 ```
 
-Finaly, the user must be able to do SELECT queries on the foreign tables. 
+Finally, the user must be able to do SELECT queries on the foreign tables. 
 ```bash
 sudo -u postgres -- psql landscape-standalone-main -c "GRANT SELECT ON TABLE public.distribution TO landscape_clearpass;"
 sudo -u postgres -- psql landscape-standalone-main -c "GRANT SELECT ON TABLE public.computer TO landscape_clearpass;"

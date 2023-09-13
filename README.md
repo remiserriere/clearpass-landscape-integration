@@ -21,8 +21,8 @@ Landscape stores data on multiple databases, and we must address them all using 
 We first need to create a new user that will specifically be used for ClearPass, then we can create a new database. The first command will ask you to specify a password for the user, keep this password in mind for later...
 
 ```bash
-sudo -u postgres createuser --no-createdb --no-createrole --no-superuser pwprompt landscape_clearpass
-sudo -u postgres -- psql -c 'CREATE DATABASE "landscape-clearpass with owner = landscape_clearpass;'
+sudo -u postgres createuser --no-createdb --no-createrole --no-superuser --pwprompt landscape_clearpass
+sudo -u postgres -- psql -c 'CREATE DATABASE "landscape-clearpass" with owner = landscape_clearpass;'
 ```
 
 Now we can connect to the newly created database and create everything we need with the following command:

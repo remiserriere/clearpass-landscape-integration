@@ -1,15 +1,23 @@
-# clearpass-landscape-integration
+# Aruba ClearPass and Canonical Landscape integration
+Or how to use Landscape as an authentication source in ClearPass to authenticate your Linux/Ubuntu workstations against your 802.1x infrastructure?
 
 ## What is this and how does it work?
+This project, which is basically a humble readme serving as a documentation, describes how to interface Aruba ClearPass and Canonical Landscape (on-premise only, SaaS is not supported) so Landscape could be used as an authentication source in ClearPass Policy Manager. 
+It can be used to authenticate wired or wireless devices in a 802.1x service, for example. 
 
+A generic SQL authentication source is declared in ClearPass. It connects to the Landscape database server and pulls information from its databases. 
 
+Landscape stores data on multiple databases, and we must address them all using one SQL authentication source in ClearPass. For this reason, a specific database is created on the Landscape database server (but we could potentially store it on another PostgreSQL server!) and a foreign data wrapper is used to "mount" tables from the different Landscape databases into one database.
+
+**ASSUMPTIONS:** 
+* You are using an on-premise version of Landscape.
+* You are running Landscape 23.03 (if not, make sure the schemas are similar).
+* You have access to your Landscape database server and you can run shell and SQL commands against it.
+* ClearPass 6.11 was used here, but other versions should work as well.
 
 ## Preparing the database
 
-### 1. Allowing access to the database from the ClearPass server
-TODO: pg_hba.conf and postgresql.conf
-
-### 2. ClearPass database
+### ClearPass database
 We first need to create a new user that will specifically be used for ClearPass, then we can create a new database. The first command will ask you to specify a password for the user, keep this password in mind for later...
 
 ```bash
@@ -86,7 +94,65 @@ sudo -u postgres -- psql landscape-standalone-resource-1 -c "GRANT SELECT ON TAB
 sudo -u postgres -- psql landscape-standalone-resource-1 -c "GRANT SELECT ON TABLE public.hardware_info TO landscape_clearpass;"
 ```
 
+### Allowing access to the database from the ClearPass server
+Add "host landscape-clearpass landscape_clearpass ###_CLEARPASS_IP_### md5" to the pg_hba.conf file on your Landscape database server. This will allow the user landscape_clearpass to connect to the database landscape-clearpass from the IP address ###CLEARPASS_IP### (set to your ClearPass IP address, and don't forget the /32 after the address!).
+``` bash
+sudo bash -c "echo host landscape-clearpass landscape_clearpass ###_CLEARPASS_IP_###/32 md5 >> /etc/postgresql/12/main/pg_hba.conf"
+```
+
+Now edit the file "/etc/postgresql/12/main/postgresql.conf" (```sudo vim /etc/postgresql/12/main/postgresql.conf```) and make sure the "listen_addresses" is set to "*". Port should already be set to 5432.
+```conf
+#------------------------------------------------------------------------------
+# CONNECTIONS AND AUTHENTICATION
+#------------------------------------------------------------------------------
+
+# - Connection Settings -
+
+listen_addresses = '*'					# what IP address(es) to listen on;
+                                        # comma-separated list of addresses;
+                                        # defaults to 'localhost'; use '*' for all
+                                        # (change requires restart)
+port = 5432                             # (change requires restart)
+```
+
+Restart the PostgreSQL service to apply changes with the following command: ```sudo systemctl restart postgresql```.
+
+Now run the command ```sudo -u postgres -- psql -l```. If everything is correct and the service restarted with no error, you should get a listing of all the databases.
+```bash
+# sudo -u postgres -- psql -l
+                                              List of databases
+              Name               |        Owner        | Encoding | Collate |  Ctype  |   Access privileges
+---------------------------------+---------------------+----------+---------+---------+-----------------------
+ landscape-clearpass             | landscape_clearpass | UTF8     | C.UTF-8 | C.UTF-8 |
+ landscape-standalone-account-1  | postgres            | UTF8     | C.UTF-8 | C.UTF-8 |
+ landscape-standalone-knowledge  | postgres            | UTF8     | C.UTF-8 | C.UTF-8 |
+ landscape-standalone-main       | postgres            | UTF8     | C.UTF-8 | C.UTF-8 | =Tc/postgres         +
+                                 |                     |          |         |         | postgres=CTc/postgres+
+                                 |                     |          |         |         | readaccess=c/postgres
+ landscape-standalone-package    | postgres            | UTF8     | C.UTF-8 | C.UTF-8 |
+ landscape-standalone-resource-1 | postgres            | UTF8     | C.UTF-8 | C.UTF-8 | =Tc/postgres         +
+                                 |                     |          |         |         | postgres=CTc/postgres+
+                                 |                     |          |         |         | readaccess=c/postgres
+ landscape-standalone-session    | postgres            | UTF8     | C.UTF-8 | C.UTF-8 |
+ postgres                        | postgres            | UTF8     | C.UTF-8 | C.UTF-8 |
+ template0                       | postgres            | UTF8     | C.UTF-8 | C.UTF-8 | =c/postgres          +
+                                 |                     |          |         |         | postgres=CTc/postgres
+ template1                       | postgres            | UTF8     | C.UTF-8 | C.UTF-8 | postgres=CTc/postgres+
+                                 |                     |          |         |         | =c/postgres
+(10 rows)
+```
+
 ## ClearPass side
+
+### 0. Importing a pre-made authentication source
+You don't want to create the authentcation source from scratch? Then simply download this file: [AuthSourceLandscape.xml](AuthSourceLandscape.xml)
+There is no secret, leave the field empty.
+![Clearpass 0](img/clearpass-0.png)
+
+Edit the authentication source and in the Primary tab set the server name to your ClearPass database server IP or DNS, and set the password. 
+![Clearpass 0Bis](img/clearpass-0bis.png)
+
+You may skip parts 1 and 2 now :).
 
 ### 1. Create a generic SQL authentication source
 Login to your ClearPass Policy Manager server and navigate to Configuration > Authentication > Sources and add a new authentication source.
@@ -145,4 +211,6 @@ and d.id = c.distribution_id
 When saving the last two filters, you might be granted with the following error but you can safely ignore it. 
 ![Clearpass 8](img/clearpass-8.png)
 
-### 2. Use case
+### 2. Use case example
+
+TODO

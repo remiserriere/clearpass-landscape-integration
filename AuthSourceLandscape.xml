@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TipsContents xmlns="http://www.avendasys.com/tipsapiDefs/1.0">
+  <TipsHeader exportTime="Wed Sep 13 14:15:26 CEST 2023" version="6.11"/>
+  <AuthSources>
+    <AuthSource description="Canonical Landscape computer authentication source" name="Landscape" isAuthorizationSource="true" type="Sql">
+      <NVPair value="60" name="cache_timeout"/>
+      <NVPair value="PostgreSQL" name="sql_driver"/>
+      <NVPair value="CHANGE.ME" name="server"/>
+      <NVPair value="5432" name="port"/>
+      <NVPair value="landscape-clearpass" name="db_name"/>
+      <NVPair value="landscape_clearpass" name="login"/>
+      <NVPair value="CHANGE ME" name="password"/>
+      <NVPair value="10" name="timeout"/>
+      <NVPair value="cleartext" name="password_type"/>
+      <Filters>
+        <Filter paramValues="" filterQuery="select c.id, c.title, c.hostname, hi.str_value as User_Password, cu.home_phone as User_Name
+from computer c, hardware_info hi, computer_user cu 
+where c.id = hi.computer_id
+and c.id = cu.computer_id 
+and hi.key like 'pci.network:%.serial'
+and cu.home_phone = LOWER('%{Radius:IETF:User-Name}')
+and hi.str_value = '%{Connection:Client-Mac-Address-Colon}'" filterName="Authentication">
+          <Attributes>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="Integer" aliasName="LandscapeComputerID" attrName="id"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerTitle" attrName="title"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerHostname" attrName="hostname"/>
+          </Attributes>
+        </Filter>
+        <Filter paramValues="" filterQuery="select * from crosstab(
+'
+select computer_id, computer_id, str_value from hardware_info hi 
+where hi.computer_id = %{LandscapeComputerID}
+and (
+	hi.key = ''description''
+	or hi.key = ''vendor''
+	or hi.key = ''product''
+	or hi.key = ''serial''
+)
+'
+)
+as ct(id integer, description text, vendor text, product text, serial text)" filterName="LandscapeInformation">
+          <Attributes>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerDescription" attrName="description"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerVendor" attrName="vendor"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerProduct" attrName="product"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerSerial" attrName="serial"/>
+          </Attributes>
+        </Filter>
+        <Filter paramValues="" filterQuery="select d.description, d.distributor, d.release, d.code_name 
+from distribution d, computer c 
+where c.id = %{LandscapeComputerID}
+and d.id = c.distribution_id " filterName="LandscapeInformationDistribution">
+          <Attributes>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerDistribDescription" attrName="description"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerDistribDistributor" attrName="distributor"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerDistribRelease" attrName="release"/>
+            <Attribute isUserAttr="true" isRole="false" attrDataType="String" aliasName="LandscapeComputerDistribCodename" attrName="code_name"/>
+          </Attributes>
+        </Filter>
+      </Filters>
+    </AuthSource>
+  </AuthSources>
+</TipsContents>

@@ -7,6 +7,8 @@ It can be used to authenticate wired or wireless devices in a 802.1x service, fo
 
 A generic SQL authentication source is declared in ClearPass. It connects to the Landscape database server and pulls information from its databases. 
 
+The authentication source is basically a SQL query, which must return the computer's MAC address as "user_password". Only one line is allowed. This "password" must match the Radius attribute Radius:IETF:Calling-Station-Id sent by the Wifi controller during the authentication request. 
+
 Landscape stores data on multiple databases, and we must address them all using one SQL authentication source in ClearPass. For this reason, a specific database is created on the Landscape database server (but we could potentially store it on another PostgreSQL server!) and a foreign data wrapper is used to "mount" tables from the different Landscape databases into one database.
 
 **ASSUMPTIONS:** 
@@ -14,6 +16,9 @@ Landscape stores data on multiple databases, and we must address them all using 
 * You are running Landscape 23.03 (if not, make sure the schemas are similar).
 * You have access to your Landscape database server and you can run shell and SQL commands against it.
 * ClearPass 6.11 was used here, but other versions should work as well.
+* User's email address is stored on the user's "home phone" property on Linux and on Landscape, and is used to identify the computer in Landscape:
+
+![Landscape 0](img/landscape-0.png)
 
 ## Preparing the database
 
@@ -213,4 +218,47 @@ When saving the last two filters, you might be granted with the following error 
 
 ### 2. Use case example
 
-TODO
+On the computer side, a wireless connection is created using "nmcli" as follow. This connection connects to the SSID "SSID_WIFI_TEST" with EAP-TLS, using the user's email address as identity. This identity will show in ClearPass as the username.
+The certificate used by the connection is managed by "certmonger".
+```bash
+wifi=$(iwconfig 2>&1 | grep -i ieee | cut -d' ' -f1)
+ssid="SSID_WIFI_TEST"
+userEmail="user.email@address.com"
+crt="/path/to/certificate.crt"
+key="/path/to/private.key"
+pas="Private Key Passcode"
+nmcli c add type wifi ifname ${wifi} con-name ${ssid} 802-11-wireless.ssid ${ssid} 802-11-wireless-security.key-mgmt wpa-eap 802-1x.eap tls 802-1x.client-cert ${crt} 802-1x.private-key ${key} 802-1x.private-key-password ${pas} 802-1x.identity ${userEmail} 802-11-wireless.hidden yes autoconnect yes
+```
+
+A new authentication method based on EAP-TLS is created on ClearPass, comparing the certificate CN/SAN. This step can be ommited and the default EAP-TLS authentication method can be used instead.
+![Clearpass 13](img/clearpass-13.png)
+
+A service is also created, matching the SSID and using the authentication method and source. Here, the service is also used with Microsoft Intune (Windows) devices but the authentication source "Local Repository" could be ommited if Intune is not in your scope. The authorization, roles and enforcement side of this service is out of scope here. 
+![Clearpass 12](img/clearpass-12.png)
+
+When the computer connects to the SSID, a Radius request is sent by the Wifi controller to the ClearPass server... And it is accepted! The authentication source is not clearly identified but we will see later that it is the Landscape SQL source.
+![Clearpass 9](img/clearpass-9.png)
+
+![Clearpass 10](img/clearpass-10.png)
+If we have a look at the Radius request attributes, we can see Radius:IETF:Calling-Station-Id contains the MAC address of the computer's wireless interface, and Radius:IETF:User-Name contains the user's email address (this is the identity parameter of the nmcli command).
+
+If we deploy the Authorization and Computed attributes, we can see that all the attributes we checked ad "attribute" in the authentication source are indeed filled with data from Landscape. We could use those attributes in the role mapping or enforcement policies! Here, we can clearly identify the authentication souce :smile:.
+![Clearpass 11](img/clearpass-11.png)
+
+### Going further
+
+The Intune extension uses the computer's Intune UID to identify the computer, the certificate should contain this information in SAN attributs. In my case, the user's email address is used to identify the device which may not be ideal but there are not a lot of fields that can be used in Landscape to identify a computer and still be accessible from the computer side and stored in a certificate. The "comment" field from Landscape can be retrieve by adding a column in the foreign table mapping: 
+* Database: landscape-standalone-main
+* Table: computer
+* Column: comment
+
+The following SQL query doesn't use the user's email address to identofy the computer against Landscape. It is less secure (it will simply tell if the computer exists in Landscape based on its MAC address) but a lot easier to work with.
+```SQL
+select c.id, c.title, c.hostname, hi.str_value as User_Password 
+from computer c, hardware_info hi 
+where c.id = hi.computer_id 
+and hi.key like 'pci.network:%.serial' 
+and hi.str_value = '%{Connection:Client-Mac-Address-Colon}';
+```
+
+I highly recommend using more information about the user to tell if it is allowed to connect. For example, an authorization source (such as Azure AD :wink:) can determine if the user is still "enabled" in the directory. 

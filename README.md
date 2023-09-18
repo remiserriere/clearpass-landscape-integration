@@ -11,7 +11,7 @@ The authentication source is basically a SQL query, which must return the comput
 
 Landscape stores data on multiple databases, and we must address them all using one SQL authentication source in ClearPass. For this reason, a specific database is created on the Landscape database server (but we could potentially store it on another PostgreSQL server!) and a foreign data wrapper is used to "mount" tables from the different Landscape databases into one database.
 
-**ASSUMPTIONS:** 
+### ASSUMPTIONS:
 * You are using an on-premise version of Landscape.
 * You are running Landscape 23.03 (if not, make sure the schemas are similar).
 * You have access to your Landscape database server and you can run shell and SQL commands against it.
@@ -152,26 +152,32 @@ Now run the command ```sudo -u postgres -- psql -l```. If everything is correct 
 ### 0. Importing a pre-made authentication source
 You don't want to create the authentcation source from scratch? Then simply download this file: [AuthSourceLandscape.xml](AuthSourceLandscape.xml)
 There is no secret, leave the field empty.
+
 ![Clearpass 0](img/clearpass-0.png)
 
 Edit the authentication source and in the Primary tab set the server name to your ClearPass database server IP or DNS, and set the password. 
+
 ![Clearpass 0Bis](img/clearpass-0bis.png)
 
 You may skip parts 1 and 2 now :).
 
 ### 1. Create a generic SQL authentication source
 Login to your ClearPass Policy Manager server and navigate to Configuration > Authentication > Sources and add a new authentication source.
+
 ![Clearpass 1](img/clearpass-1.png)
 
 In the General tab, enter a name for the new authentication source, a description if you want so, and specify "Generic SQL DB" as type. In my case, I have lowered the cache timeout to 60 seconds to get almost real-time information from Landscape but you might want to adapt this setting to your need. 
+
 ![Clearpass 2](img/clearpass-2.png)
 
 In the Primary tab, enter the Landscape IP address or DNS of your Landscape database server, I have fixed the port to 5432 here but it should not be required since this is the default port. 
 Specify the database name, user and password we have created during the database preparation step. 
 Of course, set the ODBC driver to PostgreSQL and keep the password type set to Cleartext. 
+
 ![Clearpass 3](img/clearpass-3.png)
 
 And that's where the fun begins...
+
 ![Clearpass 4](img/clearpass-4.png)
 
 Create a first filter named "Authentication" with the following filter query, and set the attributes as in the screenshot: 
@@ -184,6 +190,7 @@ and hi.key like 'pci.network:%.serial'
 and cu.home_phone = LOWER('%{Radius:IETF:User-Name}')
 and hi.str_value = '%{Connection:Client-Mac-Address-Colon}'
 ```
+
 ![Clearpass 5](img/clearpass-5.png)
 
 Create a first filter named "LandscapeInformation" with the following filter query, and set the attributes as in the screenshot. Remember the "tablefun" extension declared in the database? That's where it comes into play (the crosstab function).
@@ -202,6 +209,7 @@ and (
 )
 as ct(id integer, description text, vendor text, product text, serial text)
 ```
+
 ![Clearpass 6](img/clearpass-6.png)
 
 Create a first filter named "LandscapeInformationDistribution" with the following filter query, and set the attributes as in the screenshot: 
@@ -211,9 +219,11 @@ from distribution d, computer c
 where c.id = %{LandscapeComputerID}
 and d.id = c.distribution_id 
 ```
+
 ![Clearpass 7](img/clearpass-7.png)
 
 When saving the last two filters, you might be granted with the following error but you can safely ignore it. 
+
 ![Clearpass 8](img/clearpass-8.png)
 
 ### 2. Use case example
@@ -231,18 +241,22 @@ nmcli c add type wifi ifname ${wifi} con-name ${ssid} 802-11-wireless.ssid ${ssi
 ```
 
 A new authentication method based on EAP-TLS is created on ClearPass, comparing the certificate CN/SAN. This step can be ommited and the default EAP-TLS authentication method can be used instead.
+
 ![Clearpass 13](img/clearpass-13.png)
 
 A service is also created, matching the SSID and using the authentication method and source. Here, the service is also used with Microsoft Intune (Windows) devices but the authentication source "Local Repository" could be ommited if Intune is not in your scope. The authorization, roles and enforcement side of this service is out of scope here. 
+
 ![Clearpass 12](img/clearpass-12.png)
 
 When the computer connects to the SSID, a Radius request is sent by the Wifi controller to the ClearPass server... And it is accepted! The authentication source is not clearly identified but we will see later that it is the Landscape SQL source.
+
 ![Clearpass 9](img/clearpass-9.png)
 
 ![Clearpass 10](img/clearpass-10.png)
 If we have a look at the Radius request attributes, we can see Radius:IETF:Calling-Station-Id contains the MAC address of the computer's wireless interface, and Radius:IETF:User-Name contains the user's email address (this is the identity parameter of the nmcli command).
 
 If we deploy the Authorization and Computed attributes, we can see that all the attributes we checked ad "attribute" in the authentication source are indeed filled with data from Landscape. We could use those attributes in the role mapping or enforcement policies! Here, we can clearly identify the authentication souce :smile:.
+
 ![Clearpass 11](img/clearpass-11.png)
 
 ### Going further

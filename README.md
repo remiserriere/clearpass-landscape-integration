@@ -149,8 +149,8 @@ Now run the command ```sudo -u postgres -- psql -l```. If everything is correct 
 
 ## ClearPass side
 
-### 0. Importing a pre-made authentication source
-You don't want to create the authentcation source from scratch? Then simply download this file: [AuthSourceLandscape.xml](AuthSourceLandscape.xml)
+### Importing a pre-made authentication source
+You don't want to create the authentcation source from scratch? Then simply download this file: [AuthSourceLandscape.xml](AuthSourceLandscape.xml).
 There is no secret, leave the field empty.
 
 ![Clearpass 0](img/clearpass-0.png)
@@ -159,9 +159,9 @@ Edit the authentication source and in the Primary tab set the server name to you
 
 ![Clearpass 0Bis](img/clearpass-0bis.png)
 
-You may skip parts 1 and 2 now :).
+You may skip the next part now :smile:.
 
-### 1. Create a generic SQL authentication source
+### Create a generic SQL authentication source
 Login to your ClearPass Policy Manager server and navigate to Configuration > Authentication > Sources and add a new authentication source.
 
 ![Clearpass 1](img/clearpass-1.png)
@@ -226,7 +226,7 @@ When saving the last two filters, you might be granted with the following error 
 
 ![Clearpass 8](img/clearpass-8.png)
 
-### 2. Use case example
+## Use case example
 
 On the computer side, a wireless connection is created using "nmcli" as follow. This connection connects to the SSID "SSID_WIFI_TEST" with EAP-TLS, using the user's email address as identity. This identity will show in ClearPass as the username.
 The certificate used by the connection is managed by "certmonger".
@@ -259,14 +259,14 @@ If we deploy the Authorization and Computed attributes, we can see that all the 
 
 ![Clearpass 11](img/clearpass-11.png)
 
-### Going further
+## Going further
 
-The Intune extension uses the computer's Intune UID to identify the computer, the certificate should contain this information in SAN attributs. In my case, the user's email address is used to identify the device which may not be ideal but there are not a lot of fields that can be used in Landscape to identify a computer and still be accessible from the computer side and stored in a certificate. The "comment" field from Landscape can be retrieve by adding a column in the foreign table mapping: 
+The Intune extension uses the computer's Intune UID to identify the computer, the certificate should contain this information in SAN attributs. In my case, the user's email address is used to identify the device which may not be ideal but there are not a lot of fields that can be used in Landscape to identify a computer and still be accessible from the computer side and stored in a certificate. The "comment" field from Landscape could be potentially used, and can be retrieved by adding a column in the foreign table mapping: 
 * Database: landscape-standalone-main
 * Table: computer
 * Column: comment
 
-The following SQL query doesn't use the user's email address to identofy the computer against Landscape. It is less secure (it will simply tell if the computer exists in Landscape based on its MAC address) but a lot easier to work with.
+The following SQL query doesn't use the user's email address to identify the computer against Landscape. It is less secure (it will simply tell if the computer exists in Landscape based on its MAC address) but a lot easier to work with.
 ```SQL
 select c.id, c.title, c.hostname, hi.str_value as User_Password 
 from computer c, hardware_info hi 
@@ -275,4 +275,6 @@ and hi.key like 'pci.network:%.serial'
 and hi.str_value = '%{Connection:Client-Mac-Address-Colon}';
 ```
 
-I highly recommend using more information about the user to tell if it is allowed to connect. For example, an authorization source (such as Azure AD :wink:) can determine if the user is still "enabled" in the directory. 
+I highly recommend using more information about the user to tell if it is allowed to connect. For example:
+* An authorization source (such as Azure AD :wink:) can determine if the user is still "enabled" in the directory. 
+* Now Microsoft Defender can be deployed on Linux devices with Intune, some information could be fetched by the ClearPass Microsoft Defender extension (***not tested yet!***).
